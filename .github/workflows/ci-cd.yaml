@@ -49,20 +49,3 @@ jobs:
         curl -u ${{ secrets.JFROG_USER }}:${{ secrets.JFROG_PASS }} \
           -T index.yaml \
           "https://jfrog.ddthien.id.vn/artifactory/helm-local/index.yaml"
-
-    # 4. Cập nhật GitOps Repo
-    - name: Update GitOps Repo
-      run: |
-        git config --global user.name "github-actions"
-        git config --global user.email "actions@github.com"
-        
-        # Clone repo GitOps bằng Token
-        git clone https://x-access-token:${{ secrets.GITOPS_TOKEN }}@github.com/Thien19012004/my-gitops-repo.git
-        cd my-gitops-repo
-        
-        # Sửa dòng version: thành version mới nhất
-        sed -i "s/version: .*/version: ${{ env.NEW_VERSION }}/" argocd-apps/appset-helm.yaml
-        
-        git add .
-        git commit -m "Update todo-app to version ${{ env.NEW_VERSION }} [skip ci]"
-        git push
