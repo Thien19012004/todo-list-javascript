@@ -23,14 +23,21 @@ jobs:
         helm package ./helm/todo-app --version $VERSION --app-version $VERSION
         echo "NEW_VERSION=$VERSION" >> $GITHUB_ENV
 
-    # 3. Đẩy file lên JFrog (Các bước này giữ nguyên)
+    # 3. Đẩy file lên JFrog
     - name: Upload to JFrog
       run: |
+        # Đóng gói xong, chúng ta di chuyển file tgz ra thư mục gốc để tạo index phẳng
+        # (Giả sử file tgz đang ở thư mục hiện tại sau lệnh helm package)
+        
+        # Tạo index ngay tại thư mục chứa file tgz (không trỏ vào thư mục con)
+        helm repo index . --url https://jfrog.ddthien.id.vn/artifactory/helm-local
+        
+        # Upload file tgz
         curl -u ${{ secrets.JFROG_USER }}:${{ secrets.JFROG_PASS }} \
           -T todo-app-${{ env.NEW_VERSION }}.tgz \
           "https://jfrog.ddthien.id.vn/artifactory/helm-local/todo-app-${{ env.NEW_VERSION }}.tgz"
         
-        helm repo index . --url https://jfrog.ddthien.id.vn/artifactory/helm-local
+        # Upload file index.yaml đã được fix đường dẫn
         curl -u ${{ secrets.JFROG_USER }}:${{ secrets.JFROG_PASS }} \
           -T index.yaml \
           "https://jfrog.ddthien.id.vn/artifactory/helm-local/index.yaml"
