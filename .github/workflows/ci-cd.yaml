@@ -24,26 +24,12 @@ jobs:
         helm package ./helm/todo-app --version $VERSION --app-version $VERSION --destination .
         echo "NEW_VERSION=$VERSION" >> $GITHUB_ENV
 
-    # 3. Tạo Index phẳng và Upload lên JFrog
+    # 3. Chỉ đẩy file Chart lên JFrog (Bỏ hoàn toàn việc tạo index.yaml)
     - name: Upload to JFrog
       run: |
-        # QUAN TRỌNG: Tạo index tại thư mục hiện tại (.) 
-        # Tham số --url phải trỏ thẳng đến repo, KHÔNG có /helm/ ở cuối
-        helm repo index . --url https://jfrog.ddthien.id.vn/artifactory/helm-local
-        
-        # Kiểm tra nhanh nội dung file index vừa tạo (xem trong log GitHub)
-        echo "--- Nội dung index.yaml vừa tạo ---"
-        cat index.yaml
-        
-        # Upload file package .tgz lên thư mục gốc của repo helm-local
         curl -u ${{ secrets.JFROG_USER }}:${{ secrets.JFROG_PASS }} \
           -T todo-app-${{ env.NEW_VERSION }}.tgz \
           "https://jfrog.ddthien.id.vn/artifactory/helm-local/todo-app-${{ env.NEW_VERSION }}.tgz"
-        
-        # Upload file index.yaml (Ghi đè bản cũ 0.1.0 bị lỗi trên JFrog)
-        curl -u ${{ secrets.JFROG_USER }}:${{ secrets.JFROG_PASS }} \
-          -T index.yaml \
-          "https://jfrog.ddthien.id.vn/artifactory/helm-local/index.yaml"
 
     # 4. Cập nhật GitOps Repo
     - name: Update GitOps Repo
