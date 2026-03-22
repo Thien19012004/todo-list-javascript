@@ -2,7 +2,7 @@ name: CI-CD Pipeline
 
 on:
   push:
-    branches: [ "master" ]
+    branches: [ "master" ] # Đã sửa theo nhánh của bạn
 
 jobs:
   build-and-deploy:
@@ -15,29 +15,32 @@ jobs:
     - name: Set up Helm
       uses: azure/setup-helm@v3
 
-    # 2. Đóng gói Chart (Sửa đường dẫn thành helm/todo-app)
+    # 2. Đóng gói Chart
     - name: Package Helm Chart
       run: |
         VERSION="0.1.${{ github.run_number }}"
-        # Trỏ vào thư mục chứa file Chart.yaml của bạn
-        helm package ./helm/todo-app --version $VERSION --app-version $VERSION
+        # Package và ép file tgz nằm ngay tại thư mục gốc của Runner (.)
+        # Lệnh này giúp xóa bỏ mọi tiền tố đường dẫn thư mục
+        helm package ./helm/todo-app --version $VERSION --app-version $VERSION --destination .
         echo "NEW_VERSION=$VERSION" >> $GITHUB_ENV
 
-    # 3. Đẩy file lên JFrog
+    # 3. Tạo Index phẳng và Upload lên JFrog
     - name: Upload to JFrog
       run: |
-        # Đóng gói xong, chúng ta di chuyển file tgz ra thư mục gốc để tạo index phẳng
-        # (Giả sử file tgz đang ở thư mục hiện tại sau lệnh helm package)
-        
-        # Tạo index ngay tại thư mục chứa file tgz (không trỏ vào thư mục con)
+        # QUAN TRỌNG: Tạo index tại thư mục hiện tại (.) 
+        # Tham số --url phải trỏ thẳng đến repo, KHÔNG có /helm/ ở cuối
         helm repo index . --url https://jfrog.ddthien.id.vn/artifactory/helm-local
         
-        # Upload file tgz
+        # Kiểm tra nhanh nội dung file index vừa tạo (xem trong log GitHub)
+        echo "--- Nội dung index.yaml vừa tạo ---"
+        cat index.yaml
+        
+        # Upload file package .tgz lên thư mục gốc của repo helm-local
         curl -u ${{ secrets.JFROG_USER }}:${{ secrets.JFROG_PASS }} \
           -T todo-app-${{ env.NEW_VERSION }}.tgz \
           "https://jfrog.ddthien.id.vn/artifactory/helm-local/todo-app-${{ env.NEW_VERSION }}.tgz"
         
-        # Upload file index.yaml đã được fix đường dẫn
+        # Upload file index.yaml (Ghi đè bản cũ 0.1.0 bị lỗi trên JFrog)
         curl -u ${{ secrets.JFROG_USER }}:${{ secrets.JFROG_PASS }} \
           -T index.yaml \
           "https://jfrog.ddthien.id.vn/artifactory/helm-local/index.yaml"
@@ -47,9 +50,14 @@ jobs:
       run: |
         git config --global user.name "github-actions"
         git config --global user.email "actions@github.com"
+        
+        # Clone repo GitOps bằng Token
         git clone https://x-access-token:${{ secrets.GITOPS_TOKEN }}@github.com/Thien19012004/my-gitops-repo.git
         cd my-gitops-repo
+        
+        # Sửa dòng version: thành version mới nhất
         sed -i "s/version: .*/version: ${{ env.NEW_VERSION }}/" argocd-apps/appset-helm.yaml
+        
         git add .
         git commit -m "Update todo-app to version ${{ env.NEW_VERSION }} [skip ci]"
         git push
