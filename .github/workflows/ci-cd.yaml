@@ -2,7 +2,11 @@ name: CI-CD Pipeline
 
 on:
   push:
-    branches: [ "master" ] # Đã sửa theo nhánh của bạn
+    branches: [ "master" ]
+
+env:
+  # Tự động tạo Version dùng chung cho cả Docker và Helm (ví dụ 0.1.10)
+  APP_VERSION: "0.1.${{ github.run_number }}"
 
 jobs:
   build-and-deploy:
@@ -11,41 +15,38 @@ jobs:
     - name: Checkout Code
       uses: actions/checkout@v3
 
-    # 1. Cài đặt Helm
+    # ==========================================
+    # 1. BUILD & PUSH DOCKER IMAGE LÊN DOCKER HUB
+    # ==========================================
+    - name: Log in to Docker Hub
+      uses: docker/login-action@v2
+      with:
+        username: ${{ secrets.DOCKERHUB_USERNAME }}
+        password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+    - name: Build and Push Docker Image
+      uses: docker/build-push-action@v4
+      with:
+        context: .
+        push: true
+        # Đẩy thẳng vào kho thien19012004 của bạn với tag mới
+        tags: thien19012004/todo-app:${{ env.APP_VERSION }}
+
+    # ==========================================
+    # 2. ĐÓNG GÓI & PUSH HELM CHART LÊN JFROG
+    # ==========================================
     - name: Set up Helm
       uses: azure/setup-helm@v3
 
-    # 2. Đóng gói Chart
     - name: Package Helm Chart
       run: |
-        VERSION="0.1.${{ github.run_number }}"
-        # Package và ép file tgz nằm ngay tại thư mục gốc của Runner (.)
-        # Lệnh này giúp xóa bỏ mọi tiền tố đường dẫn thư mục
-        helm package ./helm/todo-app --version $VERSION --app-version $VERSION --destination .
-        echo "NEW_VERSION=$VERSION" >> $GITHUB_ENV
+        helm package ./helm/todo-app --version ${{ env.APP_VERSION }} --app-version ${{ env.APP_VERSION }} --destination .
 
-    # 3. Tạo Index chuẩn bằng cách MERGE (Gộp) với bản cũ
     - name: Upload to JFrog
       run: |
-        # Bước 3.1: Thử tải file index.yaml hiện tại trên JFrog về (nếu có)
-        # Nếu bị lỗi 404 (không có file), nó sẽ báo "Tạo mới" và đi tiếp
         curl -u ${{ secrets.JFROG_USER }}:${{ secrets.JFROG_PASS }} \
-          -f -O "https://jfrog.ddthien.id.vn/artifactory/helm-local/index.yaml" || echo "Không có index cũ, sẽ tạo mới"
+          -T todo-app-${{ env.APP_VERSION }}.tgz \
+          "https://jfrog.ddthien.id.vn/artifactory/helm-local/todo-app-${{ env.APP_VERSION }}.tgz"
 
-        # Bước 3.2: Tạo hoặc gộp index
-        # Nếu đã tải được file cũ, ta dùng cờ --merge để gộp bản mới vào
-        if [ -f "index.yaml" ]; then
-          helm repo index . --url https://jfrog.ddthien.id.vn/artifactory/helm-local --merge index.yaml
-        else
-          helm repo index . --url https://jfrog.ddthien.id.vn/artifactory/helm-local
-        fi
-
-        # Bước 3.3: Upload file Chart (.tgz) lên JFrog
-        curl -u ${{ secrets.JFROG_USER }}:${{ secrets.JFROG_PASS }} \
-          -T todo-app-${{ env.NEW_VERSION }}.tgz \
-          "https://jfrog.ddthien.id.vn/artifactory/helm-local/todo-app-${{ env.NEW_VERSION }}.tgz"
-
-        # Bước 3.4: Upload file index.yaml (đã gộp đủ các version) lên JFrog
-        curl -u ${{ secrets.JFROG_USER }}:${{ secrets.JFROG_PASS }} \
-          -T index.yaml \
-          "https://jfrog.ddthien.id.vn/artifactory/helm-local/index.yaml"
+    # Đã xóa bỏ hoàn toàn phần update GitOps Repo bằng sed, 
+    # vì bây giờ hệ thống đã tự động 100% bằng * và Image Updater!
