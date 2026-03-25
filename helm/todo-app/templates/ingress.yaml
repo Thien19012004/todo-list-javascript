@@ -1,0 +1,19 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: todo-app-ingress
+  namespace: todo-app # Phải cùng namespace với Service của App
+  annotations:
+    kubernetes.io/ingress.class: nginx
+spec:
+  rules:
+  - host: todo.ddthien.id.vn
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: todo-app # Tên Service của bạn
+            port:
+              number: 80

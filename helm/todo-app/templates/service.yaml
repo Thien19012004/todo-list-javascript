@@ -6,6 +6,7 @@ metadata:
   labels:
     app: todo-app
 spec:
+  # Lấy giá trị từ values.yaml (sẽ là ClusterIP)
   type: {{ .Values.service.type }}
   selector:
     app: todo-app
@@ -13,5 +14,8 @@ spec:
     - name: http
       port: {{ .Values.service.port }}
       targetPort: {{ .Values.containerPort }}
-      nodePort: {{ .Values.service.nodePort }}
       protocol: TCP
+      # Chỉ thêm nodePort nếu type là NodePort, còn ClusterIP thì bỏ qua
+      {{- if eq .Values.service.type "NodePort" }}
+      nodePort: {{ .Values.service.nodePort }}
+      {{- end }}
